@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session, make_response
+from urllib.parse import urlparse
 import psycopg2
 from psycopg2 import pool
 import os
@@ -55,6 +56,7 @@ import psycopg2
 from psycopg2 import pool
 
 # ================= DATABASE CONNECTION POOL =================
+
 class ConnectionWrapper:
     def __init__(self, conn, pool_instance=None):
         self._conn = conn
@@ -78,44 +80,53 @@ class ConnectionWrapper:
         else:
             self._conn.close()
 
+
 db_pool = None
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 try:
-    db_pool = pool.ThreadedConnectionPool(
-        1, 120,  # Aumentamos a 120 conexiones para soportar 100+ usuarios concurrentes
-        host=os.getenv("DB_HOST", "localhost"),
-        database=os.getenv("DB_NAME", "bolsa_trabajo_uto"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASS", "angel123"),
-        port=os.getenv("DB_PORT", "5432"),
-        client_encoding='utf8'
-    )
-    print("Pool de conexiones creado con éxito.")
-except Exception as e:
-    print(f"Error al crear el pool de conexiones: {e}")
+    if DATABASE_URL:
+        # 🔥 CONEXIÓN PARA RENDER
+        url = urlparse(DATABASE_URL)
 
-def get_connection():
-    if db_pool:
-        # En caso de que el pool esté vacío o fallando, podríamos intentar un reconnect, 
-        # pero es más fácil obtener una conexión limpia.
-        try:
-            conn = db_pool.getconn()
-            if conn:
-                return ConnectionWrapper(conn, db_pool)
-        except Exception:
-            pass # Si falla el pool, hacemos fallback a una conexión directa
+        db_pool = pool.ThreadedConnectionPool(
+            1, 50,
+            host=url.hostname,
+            database=url.path[1:],
+            user=url.username,
+            password=url.password,
+            port=url.port
+        )
+        print("✅ Conectado a PostgreSQL (Render)")
 
-    try:
-        return ConnectionWrapper(psycopg2.connect(
+    else:
+        # 🧪 CONEXIÓN LOCAL
+        db_pool = pool.ThreadedConnectionPool(
+            1, 120,
             host=os.getenv("DB_HOST", "localhost"),
             database=os.getenv("DB_NAME", "bolsa_trabajo_uto"),
             user=os.getenv("DB_USER", "postgres"),
             password=os.getenv("DB_PASS", "angel123"),
             port=os.getenv("DB_PORT", "5432"),
             client_encoding='utf8'
-        ))
-    except UnicodeDecodeError:
-        raise Exception("❌ NO SE PUDO CONECTAR A POSTGRESQL: Posiblemente la contraseña de la BD (angel123) es incorrecta para esta computadora, o el servicio PostgreSQL no se está ejecutando.")
+        )
+        print("✅ Conectado a PostgreSQL (Local)")
+
+except Exception as e:
+    print(f"❌ Error al crear el pool de conexiones: {e}")
+
+
+def get_connection():
+    if db_pool:
+        try:
+            conn = db_pool.getconn()
+            if conn:
+                return ConnectionWrapper(conn, db_pool)
+        except Exception:
+            pass
+
+    raise Exception("❌ No se pudo obtener conexión a la base de datos")
+
 
 # Configuración de uploads
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads', 'cv')
