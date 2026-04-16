@@ -323,7 +323,6 @@ def admin():
     return render_template("admi/index.html")
 
 
-
 @app.route("/admin/inicio")
 @login_required
 def admin_inicio():
