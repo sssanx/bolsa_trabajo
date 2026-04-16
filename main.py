@@ -322,12 +322,7 @@ def admin():
         return redirect(url_for("home"))
     return render_template("admi/index.html")
 
-@app.route("/admin/manual")
-@login_required
-def admin_manual():
-    if current_user.rol != "Administrador":
-        return redirect(url_for("home"))
-    return render_template("admi/manual.html")
+
 
 @app.route("/admin/inicio")
 @login_required
